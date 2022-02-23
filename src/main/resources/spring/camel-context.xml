@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:camel="http://camel.apache.org/schema/spring"
+       xsi:schemaLocation="
+       http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd">
+
+    <import resource="amq.xml" />
+
+    <camelContext id="camel" xmlns="http://camel.apache.org/schema/spring">
+         <!--
+         1번 실습
+         TestTransformer 테스트 이것만 넣고 실행
+
+         <route id="simple-route">
+            <from id="route-timer" uri="timer:foo?period=2000" />
+            <transform>
+                <method ref="me.jaeseong.esb.TestTransformer" />
+            </transform>
+            <log id="simple-route-log" message=">>>>> ${body}" />
+            <to uri="file:/c://Temp?fileName=${date:now:yyyyMMddmmss}.txt" />
+        </route>
+        -->
+
+        <dataFormats>
+            <json id="gsonMapper" library="Gson" prettyPrint="true" />
+        </dataFormats>
+
+        <route id="servlet-route">
+            <from uri="servlet:csvr" />
+            <!-- 			<onException>
+                        <exception>java.lang.Exception</exception>
+                            <handled>
+                               <constant>true</constant>
+                            </handled>
+                            <process ref="nackService" />
+                        </onException> -->
+            <log message="@@@@@@@@@@ \n${body}" />
+            <inOnly uri="jms:TESTQueue?jmsMessageType=Text"/>
+            <process ref="ackService"/>
+            <marshal ref="gsonMapper"/>
+        </route>
+
+        <route id="esbQueue-consumer-route">
+            <from uri="jms:TESTQueue" />
+            <onException>
+                <exception>java.lang.Exception</exception>
+                <handled>
+                    <constant>true</constant>
+                </handled>
+                <log message="csProdInfoService has ERROR, so will trans message to DLQ ========> : \n ${headers} \n${body}" loggingLevel="ERROR" />
+                <to uri="jms:DLQTESTQueue" />
+            </onException>
+            <transacted ref="amqTransactionPolicy" /> <!-- queue transaction 설정 -->
+            <log message="-------------${body}" />
+            <to uri="bean:csProdInfoService?method=insert" />
+        </route>
+
+    </camelContext>
+</beans>
